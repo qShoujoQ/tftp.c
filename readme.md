@@ -49,7 +49,7 @@ For debugging purposes.
 
 ### Examples
 In `examples` directory:
-- `tftpc.c` - simple TFTP client implementation, with support for downloading and uploading files.
+- `client.c` - simple TFTP client implementation, with support for downloading and uploading files.
 
 ### Imports
 ```c
