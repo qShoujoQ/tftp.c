@@ -14,7 +14,8 @@ Header is standalone and "platform independent", unless you don't have `stdint.h
 Compiles without warnings with `-Wall -Wextra -Werror -pedantic` flags.
 
 Library is in pre-alpha state, todos:
-- [ ] Clean up code - few functions can be refactored.
+- [x] Clean up code - few functions can be refactored.
+    - [ ? ] Something about options doesn't feel quite right.
 - [ ] Improve error handling - introduce TFTP specific error codes.
 - [ ] Add unit tests and windows example.
 - [ ] Maybe support more TFTP extensions.

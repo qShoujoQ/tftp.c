@@ -17,7 +17,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 
-bool tftpc_send_packet(int sock, struct sockaddr_in* server_addr, tftp_packet_t* packet) {
+bool tftpc_send_packet(int sock, const struct sockaddr_in* server_addr, const tftp_packet_t* packet) {
     uint16_t buf_len;
     uint8_t* buffer = tftpc_buffer_from_packet(packet, &buf_len);
 
@@ -28,11 +28,11 @@ bool tftpc_send_packet(int sock, struct sockaddr_in* server_addr, tftp_packet_t*
     return sent == buf_len;
 }
 
-tftp_packet_t* tftpc_receive_packet(int sock, struct sockaddr_in* server_addr) {
-    uint8_t buffer[1024];
-    socklen_t server_addr_len = sizeof(*server_addr);
+tftp_packet_t* tftpc_receive_packet(int sock, uint16_t blksize, struct sockaddr_in* out_server_addr) {
+    uint8_t *buffer = malloc(blksize + sizeof(tftp_packet_t));
+    socklen_t server_addr_len = out_server_addr ? sizeof(*out_server_addr) : 0; // can be null if we don't care about the source
 
-    ssize_t received = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)server_addr, &server_addr_len);
+    ssize_t received = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr*)out_server_addr, &server_addr_len);
 
     if (received < 0) {
         perror("recvfrom");
@@ -42,7 +42,7 @@ tftp_packet_t* tftpc_receive_packet(int sock, struct sockaddr_in* server_addr) {
     return tftpc_packet_from_buffer(buffer, received);
 }
 
-bool download(char* file_name, uint16_t tsize, uint16_t blksize, struct sockaddr_in* server_addr, int socket) {
+bool download(const char* file_name, uint16_t tsize, uint16_t blksize, const struct sockaddr_in* server_addr, int socket) {
     FILE* file = fopen(file_name, "wb");
     if (file == NULL) {
         perror("fopen");
@@ -62,7 +62,7 @@ bool download(char* file_name, uint16_t tsize, uint16_t blksize, struct sockaddr
 
     // receive data:
     while (bytes_read < tsize) {
-        tftp_packet_t* data = tftpc_receive_packet(socket, server_addr);
+        tftp_packet_t* data = tftpc_receive_packet(socket, blksize, NULL);
         if (data == NULL) {
             // perror("recvfrom"); // reported already
             return false;
@@ -107,7 +107,7 @@ bool download(char* file_name, uint16_t tsize, uint16_t blksize, struct sockaddr
     return true;
 }
 
-bool upload(char* file_name, uint16_t blksize, uint16_t tsize, struct sockaddr_in* server_addr, int socket) {
+bool upload(const char* file_name, uint16_t blksize, uint16_t tsize, struct sockaddr_in* server_addr, int socket) {
     FILE* file = fopen(file_name, "rb");
     if (file == NULL) {
         perror("fopen");
@@ -138,7 +138,7 @@ bool upload(char* file_name, uint16_t blksize, uint16_t tsize, struct sockaddr_i
         }
         tftpc_packet_free(data_packet);
 
-        tftp_packet_t* ack = tftpc_receive_packet(socket, server_addr);
+        tftp_packet_t* ack = tftpc_receive_packet(socket, blksize, NULL);
         if (ack == NULL) {
             perror("recvfrom");
             return false;
@@ -233,7 +233,7 @@ int main(int argc, char* argv[]) {
     /* TFTP stuff */
     // request
     uint16_t tsize = 0;
-    uint16_t blksize = 8192;
+    const uint16_t blksize = 8196;
 
     if (request_type == TFTP_WRQ) {
         FILE* file = fopen(argv[2], "rb");
@@ -260,7 +260,7 @@ int main(int argc, char* argv[]) {
     request = NULL;
 
     // server response
-    tftp_packet_t* response = tftpc_receive_packet(sock, &server_addr_com);
+    tftp_packet_t* response = tftpc_receive_packet(sock, blksize, &server_addr_com);
     if (response == NULL) {
         perror("recvfrom");
         return EXIT_FAILURE;
@@ -278,7 +278,11 @@ int main(int argc, char* argv[]) {
     }
 
     tsize = atoi(tftpc_packet_get_option(response, "tsize"));
-    blksize = atoi(tftpc_packet_get_option(response, "blksize"));
+    if (atoi(tftpc_packet_get_option(response, "blksize")) != blksize) {
+        printf("Unexpected blksize: %s\n", tftpc_packet_get_option(response, "blksize"));
+        tftpc_packet_free(response);
+        return EXIT_FAILURE;
+    }
 
     assert(blksize > 0);
     assert(tsize > 0);
