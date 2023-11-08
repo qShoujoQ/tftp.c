@@ -15,9 +15,8 @@ Compiles without warnings with `-Wall -Wextra -Werror -pedantic` flags.
 
 Library is in pre-alpha state, todos:
 - [x] Clean up code - few functions can be refactored.
-    - [ ? ] Something about options doesn't feel quite right.
-- [ ] Improve error handling - introduce TFTP specific error codes.
-- [ ] Add unit tests and windows example.
+    - [ ? ] Something about options doesn't feel quite right. Maybe move outside of union?
+- [ ] Improve error handling - introduce TFTP specific error codes maybe `TFPT_ERROR_T`?
 - [ ] Maybe support more TFTP extensions.
 - [ ] Maybe add support for IPv6. ???
 
@@ -50,7 +49,7 @@ For debugging purposes.
 
 ### Examples
 In `examples` directory:
-- `client.c` - simple TFTP client implementation, with support for downloading and uploading files.
+- `client.c` - simple TFTP client implementation, with support for downloading and uploading files. Works with tftpd-hpa on ubuntu and Tftpd64 on Windows.
 
 ### Imports
 ```c
