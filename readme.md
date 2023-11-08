@@ -1,5 +1,5 @@
 ## tftpc - TFTP implementation in C
-Based on [rfc1350](datatracker.ietf.org/doc/html/rfc1350) and [rfc2347](datatracker.ietf.org/doc/html/rfc2347)
+Based on [rfc1350](http:/datatracker.ietf.org/doc/html/rfc1350) and [rfc2347](http:/datatracker.ietf.org/doc/html/rfc2347)
 
 ### Building / using in code
 Nothing to build! Just:
