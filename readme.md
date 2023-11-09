@@ -13,12 +13,7 @@ Header is standalone and "platform independent", unless you don't have `stdint.h
 
 Compiles without warnings with `-Wall -Wextra -Werror -pedantic` flags.
 
-Library is in pre-alpha state, todos:
-- [x] Clean up code - few functions can be refactored.
-    - [ ? ] Something about options doesn't feel quite right. Maybe move outside of union?
-- [ ] Improve error handling - introduce TFTP specific error codes maybe `TFPT_ERROR_T`?
-- [ ] Maybe support more TFTP extensions.
-- [ ] Maybe add support for IPv6. ???
+It still needs some testing, but is more-or-less complete.
 
 ### Usage
 Header provides definitions for enum `tftp_opcode_t`, enum `_tftpc_error_e`, simple definition for struct `tftp_option_t` and whole `tftp_packet_t` struct - It's up to You what you do with them. In addition it defines function declarations for functions:
