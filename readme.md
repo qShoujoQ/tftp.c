@@ -21,29 +21,31 @@ Library is in pre-alpha state, todos:
 - [ ] Maybe add support for IPv6. ???
 
 ### Usage
-Header provides definitions for enum `tftp_opcode_t`, simple definition for struct `tftp_option_t` and whole `tftp_packet_t` struct - It's up to You what you do with them. In addition it defines function declarations for functions:
+Header provides definitions for enum `tftp_opcode_t`, enum `_tftpc_error_e`, simple definition for struct `tftp_option_t` and whole `tftp_packet_t` struct - It's up to You what you do with them. In addition it defines function declarations for functions:
 
 ```c
 void tftpc_packet_free(tftp_packet_t *packet);
 ```
 For quick and easy freeing of packet memory.
 ```c
-tftp_packet_t *tftpc_packet_from_buffer(uint8_t *buffer, uint16_t size);
-uint8_t *tftpc_buffer_from_packet(tftp_packet_t *packet, uint16_t *out_size);
+tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size);
+uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_size);
 ```
 For serialization / deserialization of packets. Result of those functions must be freed - `tftpc_packet_free` for packet, `free` for buffer.
 ```c
-tftp_packet_t *tftpc_packet_new_request(tftp_opcode_t opcode, char *filename, char *mode);
+tftp_packet_t *tftpc_packet_new_request(tftp_opcode_t opcode, const char *filename, const char *mode);
 tftp_packet_t *tftpc_packet_new_oack();
-void tftpc_packet_add_option(tftp_packet_t *packet, char *option, char *value);
-char* tftpc_packet_get_option(tftp_packet_t* packet, char* option);
+void tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value);
+char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option);
 
-tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, uint8_t *data, uint16_t data_size); // block, NULL, 0 for ACK
-tftp_packet_t *tftpc_packet_new_error(uint16_t code, char *msg);
+tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, const uint8_t *data, uint16_t data_size); // block, NULL, 0 for ACK
+tftp_packet_t *tftpc_packet_new_error(uint16_t code, const char *msg);
 ```
 As shortcuts for creating packets. After using one of those, it must be freed with `tftpc_packet_free`.
 ```c
-void tftpc_packet_print(tftp_packet_t *packet);
+const char *tftpc_opcode_to_string(tftp_opcode_t opcode);
+const char *tftpc_error_to_string(tftp_error_t error);
+void tftpc_packet_print(const tftp_packet_t *packet);
 ```
 For debugging purposes.
 

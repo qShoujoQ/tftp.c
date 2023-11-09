@@ -24,7 +24,6 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 
-// #define print_net_error() printf("WSA error %d: %s\n", WSAGetLastError(), tftpc_winsock_error_to_string(WSAGetLastError()))
 #define print_error(from) perror(from)
 
 void print_net_error(char *from)
@@ -43,7 +42,7 @@ bool tftpc_send_packet(int sock, const struct sockaddr_in *server_addr, const tf
     uint16_t buf_len;
     uint8_t *buffer = tftpc_buffer_from_packet(packet, &buf_len);
 
-    ssize_t sent = sendto(sock, (const char *)buffer, buf_len, 0, (struct sockaddr *)server_addr, sizeof(*server_addr));
+    size_t sent = sendto(sock, (const char *)buffer, buf_len, 0, (struct sockaddr *)server_addr, sizeof(*server_addr));
 
     free(buffer);
 
@@ -69,12 +68,7 @@ tftp_packet_t *tftpc_receive_packet(int sock, uint16_t blksize, struct sockaddr_
     {
         memcpy(out_server_addr, &server_addr, sizeof(server_addr));
     }
-    else
-    {
-        assert(server_addr_len == sizeof(server_addr));
-    }
 
-    // return tftpc_packet_from_buffer(buffer, received);
     tftp_packet_t *packet = tftpc_packet_from_buffer(buffer, received);
     free(buffer);
 
@@ -83,6 +77,12 @@ tftp_packet_t *tftpc_receive_packet(int sock, uint16_t blksize, struct sockaddr_
 
 bool download(const char *file_name, uint32_t tsize, uint16_t blksize, const struct sockaddr_in *server_addr, int socket)
 {
+    if (tsize == 0 || tsize / blksize >= UINT16_MAX)
+    {
+        printf("Invalid tsize: %d\n", tsize);
+        return false;
+    }
+
     FILE *file = fopen(file_name, "wb");
     if (file == NULL)
     {
@@ -161,6 +161,12 @@ bool download(const char *file_name, uint32_t tsize, uint16_t blksize, const str
 
 bool upload(const char *file_name, uint16_t blksize, uint32_t tsize, struct sockaddr_in *server_addr, int socket)
 {
+    if (tsize == 0 || tsize / blksize >= UINT16_MAX)
+    {
+        printf("Invalid tsize: %d\n", tsize);
+        return false;
+    }
+
     FILE *file = fopen(file_name, "rb");
     if (file == NULL)
     {
@@ -176,7 +182,7 @@ bool upload(const char *file_name, uint16_t blksize, uint32_t tsize, struct sock
     // upload data
     while (bytes_read < tsize)
     {
-        uint8_t data[blksize];
+        uint8_t *data = (uint8_t *)malloc(blksize);
         size_t read = fread(data, 1, blksize, file);
         if (read == 0)
         {
@@ -186,7 +192,7 @@ bool upload(const char *file_name, uint16_t blksize, uint32_t tsize, struct sock
 
         bytes_read += read;
 
-        tftp_packet_t *data_packet = tftpc_packet_new_data_ack(block++, data, read);
+        tftp_packet_t *data_packet = tftpc_packet_new_data_ack(block++, (const uint8_t *)data, read);
         if (!tftpc_send_packet(socket, server_addr, data_packet))
         {
             print_net_error("upload -> send data");
@@ -219,21 +225,21 @@ bool upload(const char *file_name, uint16_t blksize, uint32_t tsize, struct sock
         }
 
         tftpc_packet_free(ack);
-        ack = NULL;
+        free(data);
     }
 
     fclose(file);
     return true;
 }
 
-char *qitoa(int value)
+size_t get_file_size(FILE *file)
 {
-    char *result = malloc(16);
-    sprintf(result, "%d", value);
-    return result;
+    fseek(file, 0, SEEK_END);
+    size_t size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    return size;
 }
 
-// GET / PUT <file> <host:port>
 int main(int argc, char *argv[])
 {
     /* Arg parsing */
@@ -299,7 +305,6 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    // set timeout to 3 seconds
     struct timeval timeout;
     timeout.tv_sec = 3;
     timeout.tv_usec = 0;
@@ -324,14 +329,23 @@ int main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
 
-        fseek(file, 0, SEEK_END);
-        tsize = ftell(file);
-        fclose(file);
+        tsize = get_file_size(file);
     }
 
     tftp_packet_t *request = tftpc_packet_new_request(request_type, file, "octet");
-    tftpc_packet_add_option(request, "blksize", qitoa(blksize));
-    tftpc_packet_add_option(request, "tsize", qitoa(tsize));
+
+    char *blksize_str = (char *)malloc(16);
+    sprintf(blksize_str, "%d", blksize);
+    char *tsize_str = (char *)malloc(16);
+    sprintf(tsize_str, "%d", tsize);
+
+    tftpc_option_add_blksize(request, blksize_str);
+    tftpc_option_add_tsize(request, tsize_str);
+
+    free(blksize_str);
+    blksize_str = NULL;
+    free(tsize_str);
+    tsize_str = NULL;
 
     if (!tftpc_send_packet(sock, &server_addr_inital, request))
     {
@@ -352,7 +366,8 @@ int main(int argc, char *argv[])
 
     if (response->opcode == TFTP_ERROR)
     {
-        printf("TFTP error %d: %s\n", response->contents.ERROR_T.code, response->contents.ERROR_T.msg);
+        uint16_t code = response->contents.ERROR_T.code;
+        printf("TFTP error %d (%s): %s\n", code, code != 0 ? tftpc_error_to_string(code) : ":", response->contents.ERROR_T.msg);
         tftpc_packet_free(response);
         return EXIT_FAILURE;
     }

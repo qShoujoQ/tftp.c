@@ -19,6 +19,18 @@ typedef enum _tftpc_opcode_e
     TFTP_OACK
 } tftp_opcode_t;
 
+typedef enum _tftpc_error_e
+{
+    TFTP_ERROR_UNDEFINED = 0,
+    TFTP_ERROR_FILE_NOT_FOUND,
+    TFTP_ERROR_ACCESS_VIOLATION,
+    TFTP_ERROR_DISK_FULL,
+    TFTP_ERROR_ILLEGAL_OPERATION,
+    TFTP_ERROR_UNKNOWN_TRANSFER_ID,
+    TFTP_ERROR_FILE_ALREADY_EXISTS,
+    TFTP_ERROR_NO_SUCH_USER
+} tftp_error_t;
+
 typedef struct _tftpc_option_s
 {
     char *option;
@@ -46,6 +58,10 @@ TFTP Formats
           ----------------------------------------
    ERROR | 05    |  ErrorCode |   ErrMsg   |   0  |
           ----------------------------------------
+          2 bytes    string    1 byte     string   1 byte
+          -----------------------------------------------
+   OACK  | 06    |  Option1   |   0  |  Option2   |   0  |
+          -----------------------------------------------
 */
 
 typedef struct _tftpc_packet_s
@@ -92,19 +108,22 @@ void tftpc_packet_free(tftp_packet_t *packet);
 
 tftp_packet_t *tftpc_packet_new_request(tftp_opcode_t opcode, const char *filename, const char *mode);
 tftp_packet_t *tftpc_packet_new_oack();
-void tftpc_packet_add_option(tftp_packet_t *packet, char *option, char *value);
-char *tftpc_packet_get_option(tftp_packet_t *packet, char *option);
+void tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value);
+char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option);
 
-tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, uint8_t *data, uint16_t data_size); // block, NULL, 0 for ACK
-tftp_packet_t *tftpc_packet_new_error(uint16_t code, char *msg);
+tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, const uint8_t *data, uint16_t data_size); // block, NULL, 0 for ACK
+tftp_packet_t *tftpc_packet_new_error(uint16_t code, const char *msg);
 
-void tftpc_packet_print(tftp_packet_t *packet);
+void tftpc_packet_print(const tftp_packet_t *packet);
+
+const char *tftpc_opcode_to_string(tftp_opcode_t opcode);
+const char *tftpc_error_to_string(tftp_error_t error);
 
 #ifdef TFTPC_IMPLEMENTATION
 
 /* Helper functions & macros */
 
-static char *_tftpc_opcode_to_string(tftp_opcode_t opcode)
+const char *tftpc_opcode_to_string(tftp_opcode_t opcode)
 {
     switch (opcode)
     {
@@ -123,6 +142,31 @@ static char *_tftpc_opcode_to_string(tftp_opcode_t opcode)
     case TFTP_INVALID:
     default:
         return "INVALID";
+    }
+}
+
+const char *tftpc_error_to_string(tftp_error_t error)
+{
+    switch (error)
+    {
+    case TFTP_ERROR_UNDEFINED:
+        return "Undefined error, see error message (if any)";
+    case TFTP_ERROR_FILE_NOT_FOUND:
+        return "File not found";
+    case TFTP_ERROR_ACCESS_VIOLATION:
+        return "Access violation";
+    case TFTP_ERROR_DISK_FULL:
+        return "Disk full or allocation exceeded";
+    case TFTP_ERROR_ILLEGAL_OPERATION:
+        return "Illegal TFTP operation";
+    case TFTP_ERROR_UNKNOWN_TRANSFER_ID:
+        return "Unknown transfer ID";
+    case TFTP_ERROR_FILE_ALREADY_EXISTS:
+        return "File already exists";
+    case TFTP_ERROR_NO_SUCH_USER:
+        return "No such user";
+    default:
+        return "Invalid error";
     }
 }
 
@@ -165,15 +209,6 @@ static void _tftpc_copy_options(uint8_t *buffer, uint16_t *offset, tftp_option_t
         i += strlen((char *)src + i) + 1;                                                   \
     } while (0)
 
-/* TODO: broken
-#define _tftpc_pack_word(dest, src) \
-    do                              \
-    {                               \
-        dest = (src[i] << 8);       \
-        dest |= src[i + 1];         \
-        i += 2;                     \
-    } while (0)
-*/
 /* Implementation */
 
 void tftpc_packet_free(tftp_packet_t *packet)
@@ -235,10 +270,8 @@ tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size)
     tftp_packet_t *packet = (tftp_packet_t *)malloc(sizeof(tftp_packet_t));
 
     /* opcode */
-    // packet->opcode = (buffer[i++] << 8) | buffer[i++]; // implementation dependent
     packet->opcode = (buffer[i++] << 8);
     packet->opcode |= buffer[i++];
-    // _tftpc_pack_word(packet->opcode, buffer);
 
     switch (packet->opcode)
     {
@@ -283,10 +316,8 @@ tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size)
     case TFTP_ACK:
     {
         /* block number */
-        // packet->contents.DATACK_T.block = (buffer[i++] << 8) | buffer[i++]; // implementation dependent
         packet->contents.DATACK_T.block = (buffer[i++] << 8);
         packet->contents.DATACK_T.block |= buffer[i++];
-        // _tftpc_pack_word(packet->contents.DATACK_T.block, buffer); // doesn't work ;(
 
         /* data */
         if (packet->opcode == TFTP_DATA)
@@ -308,10 +339,8 @@ tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size)
     case TFTP_ERROR:
     {
         /* error code */
-        // packet->contents.ERROR_T.code = (buffer[i++] << 8) | buffer[i++];
         packet->contents.ERROR_T.code = (buffer[i++] << 8);
         packet->contents.ERROR_T.code |= buffer[i++];
-        // _tftpc_pack_word(packet->contents.ERROR_T.code, buffer);
 
         /* error message */
         packet->contents.ERROR_T.msg = malloc(strlen((char *)buffer + i));
@@ -349,11 +378,12 @@ tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size)
         exit(1);
     }
 
-    if (i != size) {
+    if (i != size)
+    {
         printf("buffer offset: %d vs size: %d. IM GONNA BLOW UP!!!!\n", i, size); // been getting some problems with this function, idk.
         _tftpc_print_buffer((uint8_t *)buffer, size);
     }
-    
+
     assert(i == size);
 
     return packet;
@@ -413,7 +443,6 @@ uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_siz
         /* block number */
         buffer[i++] = (packet->contents.DATACK_T.block >> 8) & 0xFF;
         buffer[i++] = packet->contents.DATACK_T.block & 0xFF;
-        // _tftpc_pack_word(buffer[i], packet->contents.DATACK_T.block);
 
         /* data if opcode if right */
         if (opcode == TFTP_DATA)
@@ -433,7 +462,6 @@ uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_siz
         /* error code */
         buffer[i++] = (packet->contents.ERROR_T.code >> 8) & 0xFF;
         buffer[i++] = packet->contents.ERROR_T.code & 0xFF;
-        // _tftpc_pack_word(buffer[i], packet->contents.ERROR_T.code);
 
         /* error message */
         memcpy(buffer + i, packet->contents.ERROR_T.msg, strlen(packet->contents.ERROR_T.msg) + 1);
@@ -473,7 +501,7 @@ tftp_packet_t *tftpc_packet_new_request(tftp_opcode_t opcode, const char *filena
     return packet;
 }
 
-void tftpc_packet_add_option(tftp_packet_t *packet, char *option, char *value)
+void tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value)
 {
     // Must work for RRQ, WRQ and OACK_T
     if (packet->opcode != TFTP_RRQ && packet->opcode != TFTP_WRQ && packet->opcode != TFTP_OACK)
@@ -519,7 +547,16 @@ void tftpc_packet_add_option(tftp_packet_t *packet, char *option, char *value)
     return;
 }
 
-tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, uint8_t *data, uint16_t data_size)
+#define tftpc_option_add_blksize(packet, blksize) \
+    tftpc_packet_add_option(packet, "blksize", blksize)
+#define tftpc_option_add_tsize(packet, tsize) \
+    tftpc_packet_add_option(packet, "tsize", tsize)
+#define tftpc_option_add_timeout(packet, timeout) \
+    tftpc_packet_add_option(packet, "timeout", timeout)
+#define tftpc_option_add_multicast(packet, multicast) \
+    tftpc_packet_add_option(packet, "multicast", multicast)
+
+tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, const uint8_t *data, uint16_t data_size)
 {
     tftp_packet_t *packet = malloc(sizeof(tftp_packet_t));
     packet->opcode = (data == NULL) ? TFTP_ACK : TFTP_DATA;
@@ -541,7 +578,7 @@ tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, uint8_t *data, uint16_t
     return packet;
 }
 
-tftp_packet_t *tftpc_packet_new_error(uint16_t code, char *msg)
+tftp_packet_t *tftpc_packet_new_error(uint16_t code, const char *msg)
 {
     tftp_packet_t *packet = malloc(sizeof(tftp_packet_t));
     packet->opcode = TFTP_ERROR;
@@ -565,9 +602,9 @@ tftp_packet_t *tftpc_packet_new_oack()
     return packet;
 }
 
-void tftpc_packet_print(tftp_packet_t *packet)
+void tftpc_packet_print(const tftp_packet_t *packet)
 {
-    printf("TFTP %s packet\n", _tftpc_opcode_to_string(packet->opcode));
+    printf("TFTP %s packet\n", tftpc_opcode_to_string(packet->opcode));
     switch (packet->opcode)
     {
     case TFTP_RRQ:
@@ -609,7 +646,7 @@ void tftpc_packet_print(tftp_packet_t *packet)
     return;
 }
 
-char *tftpc_packet_get_option(tftp_packet_t *packet, char *option)
+char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option)
 {
     if (packet->opcode != TFTP_RRQ && packet->opcode != TFTP_WRQ && packet->opcode != TFTP_OACK)
     {
