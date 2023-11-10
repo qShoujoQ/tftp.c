@@ -28,11 +28,14 @@
 
 void print_net_error(char *from)
 {
+    SetConsoleOutputCP(CP_UTF8); // Change CP_UTF8 to the appropriate code page
     char *s;
-    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                   NULL, WSAGetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
-    printf("WSA error %d: %s (in function %s)\n", WSAGetLastError(), s, from);
+    FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, WSAGetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&s, 0, NULL);
+    printf("WSA error %d in function %s: %s", WSAGetLastError(), from, s);
     LocalFree(s);
+    SetConsoleOutputCP(CP_OEMCP); // Reset to original code page
 }
 
 #endif
@@ -40,7 +43,14 @@ void print_net_error(char *from)
 bool tftpc_send_packet(int sock, const struct sockaddr_in *server_addr, const tftp_packet_t *packet)
 {
     uint16_t buf_len;
-    uint8_t *buffer = tftpc_buffer_from_packet(packet, &buf_len);
+    tftpc_error_t err;
+
+    uint8_t *buffer = tftpc_buffer_from_packet(packet, &buf_len, &err);
+    if (err != TFTPC_SUCCESS)
+    {
+        printf("Error: %s\n", tftpc_lib_error_to_string(err));
+        return false;
+    }
 
     size_t sent = sendto(sock, (const char *)buffer, buf_len, 0, (struct sockaddr *)server_addr, sizeof(*server_addr));
 
@@ -69,8 +79,16 @@ tftp_packet_t *tftpc_receive_packet(int sock, uint16_t blksize, struct sockaddr_
         memcpy(out_server_addr, &server_addr, sizeof(server_addr));
     }
 
-    tftp_packet_t *packet = tftpc_packet_from_buffer(buffer, received);
+    tftpc_error_t err;
+
+    tftp_packet_t *packet = tftpc_packet_from_buffer(buffer, received, &err);
     free(buffer);
+
+    if (err != TFTPC_SUCCESS)
+    {
+        printf("Error: %s\n", tftpc_lib_error_to_string(err));
+        return NULL;
+    }
 
     return packet;
 }
@@ -272,7 +290,7 @@ int main(int argc, char *argv[])
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
     {
-        print_net_error("main");
+        print_net_error("main -> WSAStartup");
         return EXIT_FAILURE;
     }
 #endif
@@ -283,7 +301,7 @@ int main(int argc, char *argv[])
 
     if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
-        print_net_error("main");
+        print_net_error("main -> socket");
         return EXIT_FAILURE;
     }
 
@@ -301,7 +319,7 @@ int main(int argc, char *argv[])
 
     if (bind(sock, (struct sockaddr *)&local_addr, sizeof(local_addr)) < 0)
     {
-        print_net_error("main");
+        print_net_error("main -> bind");
         return EXIT_FAILURE;
     }
 
@@ -311,14 +329,14 @@ int main(int argc, char *argv[])
 
     if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout)) < 0)
     {
-        print_net_error("main");
+        print_net_error("main -> setsockopt");
         return EXIT_FAILURE;
     }
 
     /* TFTP stuff */
     // request
     uint32_t tsize = 0;
-    const uint16_t blksize = 1024;
+    uint16_t blksize = 1024;
 
     if (request_type == TFTP_WRQ)
     {
@@ -349,7 +367,7 @@ int main(int argc, char *argv[])
 
     if (!tftpc_send_packet(sock, &server_addr_inital, request))
     {
-        print_net_error("main");
+        print_net_error("main -> send request");
         return EXIT_FAILURE;
     }
 
@@ -360,14 +378,14 @@ int main(int argc, char *argv[])
     tftp_packet_t *response = tftpc_receive_packet(sock, blksize, &server_addr_com);
     if (response == NULL)
     {
-        print_net_error("main");
+        print_net_error("main -> receive response");
         return EXIT_FAILURE;
     }
 
     if (response->opcode == TFTP_ERROR)
     {
         uint16_t code = response->contents.ERROR_T.code;
-        printf("TFTP error %d (%s): %s\n", code, code != 0 ? tftpc_error_to_string(code) : ":", response->contents.ERROR_T.msg);
+        printf("TFTP error %d (%s): %s\n", code, code != 0 ? tftpc_tftp_error_to_string(code) : ":", response->contents.ERROR_T.msg);
         tftpc_packet_free(response);
         return EXIT_FAILURE;
     }
@@ -378,11 +396,12 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    tsize = atoi(tftpc_packet_get_option(response, "tsize"));
+    tsize = atoi(tftpc_packet_get_option(response, "tsize", NULL));                  // ignore error for now
+    uint16_t blksize_srv = atoi(tftpc_packet_get_option(response, "blksize", NULL)); // likewise
 
-    if (atoi(tftpc_packet_get_option(response, "blksize")) != blksize)
+    if (blksize_srv != blksize)
     {
-        printf("Unexpected blksize: %s\n", tftpc_packet_get_option(response, "blksize"));
+        printf("Unexpected blksize: %d\n", blksize_srv);
         tftpc_packet_free(response);
         return EXIT_FAILURE;
     }

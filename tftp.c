@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <assert.h>
 
 typedef enum _tftpc_opcode_e
 {
@@ -19,7 +18,7 @@ typedef enum _tftpc_opcode_e
     TFTP_OACK
 } tftp_opcode_t;
 
-typedef enum _tftpc_error_e
+typedef enum _tftpc_error_tftp_e
 {
     TFTP_ERROR_UNDEFINED = 0,
     TFTP_ERROR_FILE_NOT_FOUND,
@@ -29,40 +28,23 @@ typedef enum _tftpc_error_e
     TFTP_ERROR_UNKNOWN_TRANSFER_ID,
     TFTP_ERROR_FILE_ALREADY_EXISTS,
     TFTP_ERROR_NO_SUCH_USER
-} tftp_error_t;
+} tftp_error_t; // tftp error codes
+
+typedef enum _tftpc_error_tftpc_e
+{
+    TFTPC_SUCCESS = 0,
+    TFTPC_INVALID_OPCODE,      // got packet with undefined opcode, or passed packet with wrong type to some function.
+    TFTPC_INVALID_ARGUMENT,    // passed NULL as argument, or there is something wrong with the arguments
+    TFTPC_BUFFER_OFFSET_ERROR, // offset doesn't equal to the size of buffer (packet is corrupted or bug in deserialization code)
+    TFTPC_MEMORY_ERROR,        // malloc, realloc, etc. failed. Considered fatal, library will just crash the program.
+    TFTPC_OPTION_NOT_FOUND,    // option not found in packet
+} tftpc_error_t;               // local tftpc specific error codes
 
 typedef struct _tftpc_option_s
 {
     char *option;
     char *value;
 } tftp_option_t;
-
-/*
-TFTP Formats
-
-   Type   Op #     Format without header
-
-          2 bytes    string   1 byte     string   1 byte
-          -----------------------------------------------
-   RRQ/  | 01/02 |  Filename  |   0  |    Mode    |   0  |
-   WRQ    -----------------------------------------------
-          2 bytes    2 bytes       n bytes
-          ---------------------------------
-   DATA  | 03    |   Block #  |    Data    |
-          ---------------------------------
-          2 bytes    2 bytes
-          -------------------
-   ACK   | 04    |   Block #  |
-          --------------------
-          2 bytes  2 bytes        string    1 byte
-          ----------------------------------------
-   ERROR | 05    |  ErrorCode |   ErrMsg   |   0  |
-          ----------------------------------------
-          2 bytes    string    1 byte     string   1 byte
-          -----------------------------------------------
-   OACK  | 06    |  Option1   |   0  |  Option2   |   0  |
-          -----------------------------------------------
-*/
 
 typedef struct _tftpc_packet_s
 {
@@ -101,27 +83,37 @@ typedef struct _tftpc_packet_s
 
 } tftp_packet_t;
 
-tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size);
-uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_size);
+tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size, tftpc_error_t *out_error);
+uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_size, tftpc_error_t *out_error);
 
-void tftpc_packet_free(tftp_packet_t *packet);
+tftpc_error_t tftpc_packet_free(tftp_packet_t *packet);
 
 tftp_packet_t *tftpc_packet_new_request(tftp_opcode_t opcode, const char *filename, const char *mode);
 tftp_packet_t *tftpc_packet_new_oack();
-void tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value);
-char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option);
+tftpc_error_t tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value);
+char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option, tftpc_error_t *out_error);
 
 tftp_packet_t *tftpc_packet_new_data_ack(uint16_t block, const uint8_t *data, uint16_t data_size); // block, NULL, 0 for ACK
 tftp_packet_t *tftpc_packet_new_error(uint16_t code, const char *msg);
 
-void tftpc_packet_print(const tftp_packet_t *packet);
+tftpc_error_t tftpc_packet_print(const tftp_packet_t *packet);
 
 const char *tftpc_opcode_to_string(tftp_opcode_t opcode);
-const char *tftpc_error_to_string(tftp_error_t error);
+const char *tftpc_tftp_error_to_string(tftp_error_t error);
+const char *tftpc_lib_error_to_string(tftpc_error_t error);
 
 #ifdef TFTPC_IMPLEMENTATION
 
 /* Helper functions & macros */
+
+#define _tftpc_pass_if_not_null(out, err) \
+    do                                    \
+    {                                     \
+        if (out != NULL)                  \
+        {                                 \
+            *out = err;                   \
+        }                                 \
+    } while (0)
 
 const char *tftpc_opcode_to_string(tftp_opcode_t opcode)
 {
@@ -145,7 +137,7 @@ const char *tftpc_opcode_to_string(tftp_opcode_t opcode)
     }
 }
 
-const char *tftpc_error_to_string(tftp_error_t error)
+const char *tftpc_tftp_error_to_string(tftp_error_t error)
 {
     switch (error)
     {
@@ -165,6 +157,27 @@ const char *tftpc_error_to_string(tftp_error_t error)
         return "File already exists";
     case TFTP_ERROR_NO_SUCH_USER:
         return "No such user";
+    default:
+        return "Invalid error";
+    }
+}
+
+const char *tftpc_lib_error_to_string(tftpc_error_t error)
+{
+    switch (error)
+    {
+    case TFTPC_SUCCESS:
+        return "Success";
+    case TFTPC_INVALID_OPCODE:
+        return "Invalid opcode - got packet with undefined opcode, or unexpected packet type";
+    case TFTPC_INVALID_ARGUMENT:
+        return "Invalid argument - received NULL as argument, or argument had unexpected value";
+    case TFTPC_BUFFER_OFFSET_ERROR:
+        return "Buffer offset error - packet is malformed or bug in deserialization code";
+    case TFTPC_MEMORY_ERROR:
+        return "Memory error - malloc, realloc, memcpy, etc. failed";
+    case TFTPC_OPTION_NOT_FOUND:
+        return "Option not found - option not found in packet";
     default:
         return "Invalid error";
     }
@@ -211,8 +224,10 @@ static void _tftpc_copy_options(uint8_t *buffer, uint16_t *offset, tftp_option_t
 
 /* Implementation */
 
-void tftpc_packet_free(tftp_packet_t *packet)
+tftpc_error_t tftpc_packet_free(tftp_packet_t *packet)
 {
+    tftpc_error_t error = TFTPC_SUCCESS;
+
     switch (packet->opcode)
     {
     case TFTP_RRQ:
@@ -249,21 +264,20 @@ void tftpc_packet_free(tftp_packet_t *packet)
         break;
     case TFTP_INVALID:
     default:
-        fprintf(stderr, "invalid opcode: %d\n", packet->opcode);
-        exit(1);
+        error = TFTPC_INVALID_OPCODE;
     }
 
     free(packet);
     packet = NULL;
-    return;
+    return error;
 }
 
-tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size)
+tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size, tftpc_error_t *out_error)
 {
     if (buffer == NULL)
     {
-        fprintf(stderr, "passed null as argument\n");
-        exit(1);
+        _tftpc_pass_if_not_null(out_error, TFTPC_INVALID_ARGUMENT);
+        return NULL;
     }
 
     uint16_t i = 0;
@@ -374,27 +388,34 @@ tftp_packet_t *tftpc_packet_from_buffer(const uint8_t *buffer, uint16_t size)
     break;
     case TFTP_INVALID:
     default:
-        fprintf(stderr, "invalid opcode: %d\n", packet->opcode);
-        exit(1);
+        _tftpc_pass_if_not_null(out_error, TFTPC_INVALID_OPCODE);
+        return NULL;
     }
 
     if (i != size)
     {
+        if (buffer[i + 1] == 0x00) // some servers end error packets with two null bytes, idk why
+            goto trust_me;
+
         printf("buffer offset: %d vs size: %d. IM GONNA BLOW UP!!!!\n", i, size); // been getting some problems with this function, idk.
         _tftpc_print_buffer((uint8_t *)buffer, size);
+        _tftpc_pass_if_not_null(out_error, TFTPC_BUFFER_OFFSET_ERROR);
+        return NULL;
     }
 
-    assert(i == size);
+trust_me:
+
+    _tftpc_pass_if_not_null(out_error, TFTPC_SUCCESS);
 
     return packet;
 }
 
-uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_size)
+uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_size, tftpc_error_t *out_error)
 {
     if (packet == NULL)
     {
-        fprintf(stderr, "passed null as argument\n");
-        exit(1);
+        _tftpc_pass_if_not_null(out_error, TFTPC_INVALID_ARGUMENT);
+        return NULL;
     }
 
     uint16_t packet_size = sizeof(uint16_t);
@@ -473,14 +494,28 @@ uint8_t *tftpc_buffer_from_packet(const tftp_packet_t *packet, uint16_t *out_siz
         break;
     case TFTP_INVALID:
     default:
-        fprintf(stderr, "Invalid TFTP opcode.\n");
-        exit(0);
+        _tftpc_pass_if_not_null(out_error, TFTPC_INVALID_OPCODE);
+        return NULL;
     }
 
     /* under / overflow detection */
-    assert(i == packet_size);
+    // assert(i == packet_size);
+    if (i != packet_size)
+    {
+        if (buffer[i + 1] == 0x00)
+            goto trust_me;
 
-    *out_size = packet_size;
+        printf("buffer offset: %d vs size: %d. IM GONNA BLOW UP!!!!\n", i, packet_size); // been getting some problems with this function, idk.
+        _tftpc_print_buffer((uint8_t *)buffer, packet_size);
+        _tftpc_pass_if_not_null(out_error, TFTPC_BUFFER_OFFSET_ERROR);
+        return NULL;
+    }
+
+trust_me:
+
+    _tftpc_pass_if_not_null(out_error, TFTPC_SUCCESS);
+    _tftpc_pass_if_not_null(out_size, packet_size);
+
     return buffer;
 }
 
@@ -501,13 +536,12 @@ tftp_packet_t *tftpc_packet_new_request(tftp_opcode_t opcode, const char *filena
     return packet;
 }
 
-void tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value)
+tftpc_error_t tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const char *value)
 {
     // Must work for RRQ, WRQ and OACK_T
     if (packet->opcode != TFTP_RRQ && packet->opcode != TFTP_WRQ && packet->opcode != TFTP_OACK)
     {
-        fprintf(stderr, "invalid opcode: %d\n", packet->opcode);
-        exit(1);
+        return TFTPC_INVALID_OPCODE;
     }
 
     tftp_option_t *options;
@@ -544,7 +578,7 @@ void tftpc_packet_add_option(tftp_packet_t *packet, const char *option, const ch
         packet->contents.OACK_T.options = options;
     }
 
-    return;
+    return TFTPC_SUCCESS;
 }
 
 #define tftpc_option_add_blksize(packet, blksize) \
@@ -602,7 +636,7 @@ tftp_packet_t *tftpc_packet_new_oack()
     return packet;
 }
 
-void tftpc_packet_print(const tftp_packet_t *packet)
+tftpc_error_t tftpc_packet_print(const tftp_packet_t *packet)
 {
     printf("TFTP %s packet\n", tftpc_opcode_to_string(packet->opcode));
     switch (packet->opcode)
@@ -639,19 +673,18 @@ void tftpc_packet_print(const tftp_packet_t *packet)
         break;
     case TFTP_INVALID:
     default:
-        fprintf(stderr, "invalid opcode: %d\n", packet->opcode);
-        exit(1);
+        return TFTPC_INVALID_OPCODE;
     }
 
-    return;
+    return TFTPC_SUCCESS;
 }
 
-char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option)
+char *tftpc_packet_get_option(tftp_packet_t *packet, const char *option, tftpc_error_t *out_error)
 {
     if (packet->opcode != TFTP_RRQ && packet->opcode != TFTP_WRQ && packet->opcode != TFTP_OACK)
     {
-        fprintf(stderr, "invalid opcode: %d\n", packet->opcode);
-        exit(1);
+        _tftpc_pass_if_not_null(out_error, TFTPC_INVALID_OPCODE);
+        return NULL;
     }
 
     tftp_option_t *options;
