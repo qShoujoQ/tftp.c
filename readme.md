@@ -8,7 +8,7 @@ For main file - nothing to install, just
 ```c
 #include "tftp.c"
 ```
-For tftp client addon You'll need to get the main file, as well as both `tftpc.c` and `tftpc.h`. Then, just include `tftpc.h` in your project, and add `tftpc.c` as source file, or compile it as static library and link it to the project.
+For tftp client addon, compile the addons target, include the tftpc.h header and link with libtftpclient.a file.
 
 #### [TFTPC client addon functions and data structures](addons/docs.md)
 
