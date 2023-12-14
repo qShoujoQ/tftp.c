@@ -8,13 +8,16 @@
 #include <assert.h>
 #include <limits.h>
 
+#if defined(__APPLE__) && defined(__MACH__)
+#error "booo hoooo :(((("
+#endif
+
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
 
 #pragma comment(lib, "Ws2_32.lib")
-#warning "You must link against Ws2_32.lib"
 
 #else // linux
 #include <sys/types.h>
@@ -41,14 +44,6 @@ static tftpc_client_error_t new_client_error(enum tftpc_client_error_e error, ch
 }
 
 // "TFTP error <code>: <message>"
-// static char *tftpc_packet_error_to_string(tftpc_packet_t *error)
-// {
-//     char *out = malloc(64);
-//     const char *error_str = tftpc_error_to_string(ERROR_KIND_TFTP, error->contents.ERROR_T.code);
-//     sprintf(out, "TFTP error %d (%s): %s", error->contents.ERROR_T.code, error_str, error->contents.ERROR_T.msg);
-//     return out;
-// }
-
 void tftpc_packet_error_to_string(tftpc_packet_t *error, char *out)
 {
     const char *error_str = tftpc_error_to_string(ERROR_KIND_TFTP, error->contents.ERROR_T.code);
@@ -186,7 +181,7 @@ uint8_t *tftpc_get(int udp_sock, const char *server_addr, const char *filename, 
 
     /* create request */
 
-    uint16_t blksize = 8192; // TODO: make this configurable
+    uint16_t blksize = 8192; // TODO: make this configurable maybe
     uint32_t tsize = 0;
 
     char blksize_str[16] = {0};
@@ -234,12 +229,10 @@ uint8_t *tftpc_get(int udp_sock, const char *server_addr, const char *filename, 
         }
         tsize = atoi(tsize_str);
     }
-    case TFTP_DATA: //! TODO -> goto data exchange stage
+    case TFTP_DATA: // stupid server, i don't want to deal with this
         break;
     case TFTP_ERROR:
     {
-        // char *error_str = tftpc_packet_error_to_string(response);
-        // __pass_if_not_null(out_error, new_client_error(ERROR_TFTP_ERROR, error_str)); // TODO: Small memory leak, we don't free error_str
         char error_str[64];
         tftpc_packet_error_to_string(response, error_str);
         __pass_if_not_null(out_error, new_client_error(ERROR_TFTP_ERROR, error_str));
@@ -331,7 +324,8 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
     else if (udp_sock == 0)
     {
         return new_client_error(ERROR_PARAMETERS_INVALID, "Invalid socket");
-    } else if (size > UINT16_MAX || size == 0)
+    }
+    else if (size > UINT16_MAX || size == 0)
     {
         return new_client_error(ERROR_PARAMETERS_INVALID, "Invalid size");
     }
@@ -343,7 +337,7 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
     memset(&server_addr_com, 0, sizeof(struct sockaddr_in));
 
     /* set up parameters */
-    uint16_t blksize = 8192; // TODO: make this configurable
+    uint16_t blksize = 8192; // TODO: make this configurable maybe
     uint32_t tsize = size;
 
     /* create request */
@@ -376,7 +370,6 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
         return new_client_error(ERROR_SERVER_NOT_FOUND, "Server didn't answer");
     }
 
-    // https://datatracker.ietf.org/doc/html/rfc2347
     switch (response->opcode)
     {
     case TFTP_OACK:
@@ -389,12 +382,10 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
         }
         tsize = atoi(tsize_str);
     }
-    case TFTP_ACK: //! TODO -> goto data exchange stage
+    case TFTP_ACK: // stupid server, i don't want to deal with this
         break;
     case TFTP_ERROR:
     {
-        // char *error_str = tftpc_packet_error_to_string(response);
-        // return new_client_error(ERROR_TFTP_ERROR, error_str); // TODO: Small memory leak, we don't free error_str
         char error_str[64];
         tftpc_packet_error_to_string(response, error_str);
         return new_client_error(ERROR_TFTP_ERROR, error_str);

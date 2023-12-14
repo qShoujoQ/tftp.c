@@ -60,7 +60,6 @@ int main(int argc, char **argv)
 
     if (strcmp(method, "PUT") == 0)
     {
-        // read file
         FILE *f = fopen(name, "rb");
         if (f == NULL)
         {
@@ -82,7 +81,6 @@ int main(int argc, char **argv)
         fread(data, 1, size, f);
         fclose(f);
 
-        // send file
         e = tftpc_put(sock, "127.0.0.1:69", name, "octet", data, size);
         if (e.error != ERROR_NONE)
         {
@@ -104,7 +102,6 @@ int main(int argc, char **argv)
 
         printf("Received %d bytes. Saving...\n", size);
 
-        // save to file (create if not exists, overwrite if exists)
         FILE *f = fopen(get_name_from_path(name), "wb");
         if (f == NULL)
         {
