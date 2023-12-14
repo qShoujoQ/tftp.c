@@ -29,21 +29,30 @@
 
 static tftpc_client_error_t new_client_error(enum tftpc_client_error_e error, char *message)
 {
+    char message_buf[64];
+    strcpy(message_buf, message);
+
     tftpc_client_error_t out_error = {
         .error = error,
-        .message = message,
+        .message = message_buf,
     };
 
     return out_error;
 }
 
 // "TFTP error <code>: <message>"
-static char *tftpc_packet_error_to_string(tftpc_packet_t *error)
+// static char *tftpc_packet_error_to_string(tftpc_packet_t *error)
+// {
+//     char *out = malloc(64);
+//     const char *error_str = tftpc_error_to_string(ERROR_KIND_TFTP, error->contents.ERROR_T.code);
+//     sprintf(out, "TFTP error %d (%s): %s", error->contents.ERROR_T.code, error_str, error->contents.ERROR_T.msg);
+//     return out;
+// }
+
+void tftpc_packet_error_to_string(tftpc_packet_t *error, char *out)
 {
-    char *out = malloc(64);
     const char *error_str = tftpc_error_to_string(ERROR_KIND_TFTP, error->contents.ERROR_T.code);
     sprintf(out, "TFTP error %d (%s): %s", error->contents.ERROR_T.code, error_str, error->contents.ERROR_T.msg);
-    return out;
 }
 
 // from ipv4:port to sockaddr_in
@@ -148,6 +157,9 @@ static tftpc_packet_t *tftpc_receive_packet(int sock, uint16_t blk_size, struct 
         }
 
         __pass_if_not_null(out_error, out_e);
+
+        tftpc_packet_free(packet);
+
         return NULL;
     }
 
@@ -226,12 +238,19 @@ uint8_t *tftpc_get(int udp_sock, const char *server_addr, const char *filename, 
         break;
     case TFTP_ERROR:
     {
-        char *error_str = tftpc_packet_error_to_string(response);
-        __pass_if_not_null(out_error, new_client_error(ERROR_TFTP_ERROR, error_str)); // TODO: Small memory leak, we don't free error_str
+        // char *error_str = tftpc_packet_error_to_string(response);
+        // __pass_if_not_null(out_error, new_client_error(ERROR_TFTP_ERROR, error_str)); // TODO: Small memory leak, we don't free error_str
+        char error_str[64];
+        tftpc_packet_error_to_string(response, error_str);
+        __pass_if_not_null(out_error, new_client_error(ERROR_TFTP_ERROR, error_str));
+        tftpc_packet_free(response);
+
         return NULL;
     }
     default:
         __pass_if_not_null(out_error, new_client_error(ERROR_SERVER_ERROR, "Unexpected packet"));
+        tftpc_packet_free(response);
+
         return NULL;
     }
 
@@ -309,7 +328,7 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
     {
         return new_client_error(ERROR_NULL_ARGUMENT, "Null argument");
     }
-    else if (udp_sock == INVALID_SOCKET)
+    else if (udp_sock == 0)
     {
         return new_client_error(ERROR_PARAMETERS_INVALID, "Invalid socket");
     } else if (size > UINT16_MAX || size == 0)
@@ -374,8 +393,11 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
         break;
     case TFTP_ERROR:
     {
-        char *error_str = tftpc_packet_error_to_string(response);
-        return new_client_error(ERROR_TFTP_ERROR, error_str); // TODO: Small memory leak, we don't free error_str
+        // char *error_str = tftpc_packet_error_to_string(response);
+        // return new_client_error(ERROR_TFTP_ERROR, error_str); // TODO: Small memory leak, we don't free error_str
+        char error_str[64];
+        tftpc_packet_error_to_string(response, error_str);
+        return new_client_error(ERROR_TFTP_ERROR, error_str);
     }
     default:
         return new_client_error(ERROR_SERVER_ERROR, "Unexpected packet");
@@ -430,6 +452,8 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
         data_idx += data_size;
         blk_num++;
     }
+
+    free(data_buf);
 
     return new_client_error(ERROR_NONE, "Success");
 }

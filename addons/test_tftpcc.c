@@ -1,9 +1,17 @@
 #include "tftpc.h"
 
+#ifdef _WIN32
 #include <winsock2.h>
 #include <windows.h>
+#else
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 char *get_name_from_path(const char *path)
 {
@@ -28,15 +36,17 @@ int main(int argc, char **argv)
         return 1;
     }
 
+#ifdef _WIN32
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
     {
         printf("WSAStartup failed.\n");
         return 1;
     }
+#endif
 
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == INVALID_SOCKET)
+    if (sock == -1)
     {
         printf("socket failed.\n");
         return 1;
@@ -109,8 +119,11 @@ int main(int argc, char **argv)
 end:
 
     printf("Done.\n");
-
+#ifdef _WIN32
     closesocket(sock);
     WSACleanup();
+#else
+    close(sock);
+#endif
     return 0;
 }

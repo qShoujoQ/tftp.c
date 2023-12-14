@@ -139,7 +139,7 @@ void tftpc_packet_print(const tftpc_packet_t *packet);
 
 #define __pass_if_not_null(out, data) ((out != NULL) ? (*out = data) : (void)0)
 
-void __print_bytes_hex(const uint8_t *bytes, uint16_t bytes_size) {
+static void __print_bytes_hex(const uint8_t *bytes, uint16_t bytes_size) {
 	printf("[ ");
     for (int i = 0; i < bytes_size - 1; i++)
     {
@@ -149,7 +149,7 @@ void __print_bytes_hex(const uint8_t *bytes, uint16_t bytes_size) {
     return;
 }
 
-char *__alloc_copy_string(const uint8_t *src, uint16_t *offset) {
+static char *__alloc_copy_string(const uint8_t *src, uint16_t *offset) {
     uint16_t str_size = strlen((char*)src + (*offset)) + 1;
 
     char* dst = malloc(str_size);
@@ -160,7 +160,7 @@ char *__alloc_copy_string(const uint8_t *src, uint16_t *offset) {
     return dst;
 }
 
-uint16_t __a_copy_options_from(tftpc_option_t **dst, const uint8_t *src, uint16_t *out_ocount, uint16_t idx, uint16_t bytes_size) {
+static uint16_t __a_copy_options_from(tftpc_option_t **dst, const uint8_t *src, uint16_t *out_ocount, uint16_t idx, uint16_t bytes_size) {
     uint16_t ocount = 0;
 
     if (dst == NULL || src == NULL || out_ocount == NULL) {
@@ -184,7 +184,7 @@ uint16_t __a_copy_options_from(tftpc_option_t **dst, const uint8_t *src, uint16_
     return idx;
 }
 
-void __a_copy_options_to(uint8_t **dst, uint16_t *offset, uint16_t *size, const tftpc_option_t *src, uint16_t ocount) {
+static void __a_copy_options_to(uint8_t **dst, uint16_t *offset, uint16_t *size, const tftpc_option_t *src, uint16_t ocount) {
     for (uint16_t i = 0; i < ocount; i++) {
     	uint16_t name_len = strlen(src[i].name) + 1;
     	uint16_t value_len = strlen(src[i].value) + 1;
