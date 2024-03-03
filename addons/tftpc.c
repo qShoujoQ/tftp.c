@@ -1,3 +1,18 @@
+#if defined(_WIN32) || defined(_WIN64)
+#define _WIN32_WINNT 0x0601 // windows 7+
+#include <Winsock2.h>
+#include <WS2tcpip.h>
+#include <Windows.h>
+#pragma comment(lib, "Ws2_32.lib")
+#else // linux
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <string.h>
+#include <arpa/inet.h>
+#endif // os
+
 #define TFTPC_IMPLEMENTATION
 #include "../tftp.c"
 #include "tftpc.h"
@@ -8,30 +23,10 @@
 #include <assert.h>
 #include <limits.h>
 
-#if defined(__APPLE__) && defined(__MACH__)
-#error "booo hoooo :(((("
-#endif
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-
-#else // linux
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <string.h>
-#include <arpa/inet.h>
-#endif // os
-
-#define __pass_if_not_null(out, data) ((out != NULL) ? (*out = data) : (void)0)
-
 static tftpc_client_error_t new_client_error(enum tftpc_client_error_e error, char *message)
 {
     char message_buf[64];
-    strcpy(message_buf, message);
+    snprintf(message_buf, 64, "%s", message);
 
     tftpc_client_error_t out_error = {
         .error = error,
@@ -44,22 +39,23 @@ static tftpc_client_error_t new_client_error(enum tftpc_client_error_e error, ch
 // "TFTP error <code>: <message>"
 void tftpc_packet_error_to_string(tftpc_packet_t *error, char *out)
 {
-    const char *error_str = tftpc_error_to_string(ERROR_KIND_TFTP, error->contents.ERROR_T.code);
-    sprintf(out, "TFTP error %d (%s): %s", error->contents.ERROR_T.code, error_str, error->contents.ERROR_T.msg);
+    const char *error_str = tftpc_error_to_string(ERROR_KIND_TFTP, (uint8_t)error->contents.ERROR_T.code);
+    snprintf(out, 64, "TFTP error %d (%s): %s", error->contents.ERROR_T.code, error_str, error->contents.ERROR_T.msg);
 }
 
 // from ipv4:port to sockaddr_in
 static struct sockaddr_in sockaddr_from_str(const char *addr_port)
 {
     char *addr = malloc(strlen(addr_port) + 1);
-    strcpy(addr, addr_port);
+    snprintf(addr, strlen(addr_port) + 1, "%s", addr_port);
 
     char *port = strrchr(addr, ':');
     if (port == NULL)
     {
         // set port to 69
         port = addr + strlen(addr);
-        strcpy(port, ":69");
+        // strcpy(port, ":69");
+        snprintf(port, 4, ":69");
     }
 
     *port = '\0';
@@ -128,7 +124,7 @@ static tftpc_packet_t *tftpc_receive_packet(int sock, uint16_t blk_size, struct 
     }
 
     tftpc_error_lib_t e;
-    tftpc_packet_t *packet = tftpc_packet_from_bytes(bytes, bytes_received, &e);
+    tftpc_packet_t *packet = tftpc_packet_from_bytes(bytes, (uint16_t)bytes_received, &e);
     free(bytes);
 
     if (e != TFTPC_SUCCESS && e != TFTPC_UNEXPECTED_RESULT)
@@ -183,7 +179,7 @@ uint8_t *tftpc_get(int udp_sock, const char *server_addr, const char *filename, 
     uint32_t tsize = 0;
 
     char blksize_str[16] = {0};
-    sprintf(blksize_str, "%d", blksize);
+    snprintf(blksize_str, 16, "%d", blksize);
 
     tftpc_packet_t *request = tftpc_packet_create_request(TFTP_RRQ, filename, mode);
     tftpc_packet_add_option(request, "blksize", blksize_str); // we ignore return value, args are already verified
@@ -340,9 +336,9 @@ tftpc_client_error_t tftpc_put(int udp_sock, const char *server_addr, const char
 
     /* create request */
     char blksize_str[16] = {0};
-    sprintf(blksize_str, "%d", blksize);
+    snprintf(blksize_str, 16, "%d", blksize);
     char tsize_str[16] = {0};
-    sprintf(tsize_str, "%d", tsize);
+    snprintf(tsize_str, 16, "%d", tsize);
 
     tftpc_packet_t *request = tftpc_packet_create_request(TFTP_WRQ, filename, mode);
     tftpc_packet_add_option(request, "blksize", blksize_str); // we ignore return value, args are already verified

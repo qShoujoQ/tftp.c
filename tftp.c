@@ -141,7 +141,7 @@ static void __print_bytes_hex(const uint8_t *bytes, uint16_t bytes_size)
 
 static char *__alloc_copy_string(const uint8_t *src, uint16_t *offset)
 {
-    uint16_t str_size = strlen((char *)src + (*offset)) + 1;
+    uint16_t str_size = (uint16_t)strlen((char *)src + (*offset)) + 1;
 
     char *dst = malloc(str_size);
     memcpy(dst, src + (*offset), str_size);
@@ -183,8 +183,8 @@ static void __a_copy_options_to(uint8_t **dst, uint16_t *offset, uint16_t *size,
 {
     for (uint16_t i = 0; i < ocount; i++)
     {
-        uint16_t name_len = strlen(src[i].name) + 1;
-        uint16_t value_len = strlen(src[i].value) + 1;
+        uint16_t name_len = (uint16_t)strlen(src[i].name) + 1;
+        uint16_t value_len = (uint16_t)strlen(src[i].value) + 1;
 
         *size += name_len + value_len;
         *dst = realloc(*dst, *size);
@@ -314,10 +314,10 @@ tftpc_error_lib_t tftpc_packet_add_option(tftpc_packet_t *packet, const char *na
     options = realloc(options, (*ocount) * sizeof(tftpc_option_t));
 
     options[*ocount - 1].name = malloc(strlen(name) + 1);
-    strcpy(options[*ocount - 1].name, name);
+    strcpy_s(options[*ocount - 1].name, strlen(name) + 1, name);
 
     options[*ocount - 1].value = malloc(strlen(value) + 1);
-    strcpy(options[*ocount - 1].value, value);
+    strcpy_s(options[*ocount - 1].value, strlen(value) + 1, value);
 
     if (packet->opcode == TFTP_RRQ || packet->opcode == TFTP_WRQ)
         packet->contents.RWRQ_T.options = options;
@@ -422,10 +422,10 @@ tftpc_packet_t *tftpc_packet_create_request(tftpc_opcode_t packet_kind, const ch
     p->opcode = packet_kind;
 
     p->contents.RWRQ_T.mode = malloc(strlen(mode) + 1);
-    strcpy(p->contents.RWRQ_T.mode, mode);
+    strcpy_s(p->contents.RWRQ_T.mode, strlen(mode) + 1, mode);
 
     p->contents.RWRQ_T.filename = malloc(strlen(file_name) + 1);
-    strcpy(p->contents.RWRQ_T.filename, file_name);
+    strcpy_s(p->contents.RWRQ_T.filename, strlen(file_name) + 1, file_name);
 
     p->contents.RWRQ_T.ocount = 0;
     p->contents.RWRQ_T.options = NULL;
@@ -480,7 +480,7 @@ tftpc_packet_t *tftpc_packet_create_error(uint16_t error_code, const char *error
     packet->contents.ERROR_T.code = error_code;
 
     packet->contents.ERROR_T.msg = malloc(strlen(error_message + 1));
-    strcpy(packet->contents.ERROR_T.msg, error_message);
+    strcpy_s(packet->contents.ERROR_T.msg, strlen(error_message) + 1, error_message);
 
     return packet;
 }
@@ -649,8 +649,8 @@ uint8_t *tftpc_bytes_from_packet(const tftpc_packet_t *packet, uint16_t *out_siz
     case TFTP_RRQ:
     case TFTP_WRQ:
     {
-        uint16_t filename_len = strlen(packet->contents.RWRQ_T.filename) + 1;
-        uint16_t mode_len = strlen(packet->contents.RWRQ_T.mode) + 1;
+        uint16_t filename_len = (uint16_t)strlen(packet->contents.RWRQ_T.filename) + 1;
+        uint16_t mode_len = (uint16_t)strlen(packet->contents.RWRQ_T.mode) + 1;
 
         size += filename_len + mode_len;
         bytes = realloc(bytes, size);
@@ -680,14 +680,14 @@ uint8_t *tftpc_bytes_from_packet(const tftpc_packet_t *packet, uint16_t *out_siz
         break;
 
     case TFTP_ERROR:
-        size += 2 + strlen(packet->contents.ERROR_T.msg) + 1;
+        size += 2 + (uint16_t)strlen(packet->contents.ERROR_T.msg) + 1;
         bytes = realloc(bytes, size);
 
         bytes[idx++] = (packet->contents.ERROR_T.code >> 8) & 0xFF;
         bytes[idx++] = packet->contents.ERROR_T.code & 0xFF;
 
         memcpy(bytes + idx, packet->contents.ERROR_T.msg, strlen(packet->contents.ERROR_T.msg) + 1);
-        idx += strlen(packet->contents.ERROR_T.msg) + 1;
+        idx += (uint16_t)strlen(packet->contents.ERROR_T.msg) + 1;
         break;
 
     case TFTP_OACK:

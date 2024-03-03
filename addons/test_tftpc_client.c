@@ -1,6 +1,7 @@
 #include "tftpc.h"
 
 #ifdef _WIN32
+#include <WS2tcpip.h>
 #include <winsock2.h>
 #include <windows.h>
 #else
@@ -13,10 +14,10 @@
 #include <stdio.h>
 #include <string.h>
 
-char *get_name_from_path(const char *path)
+const char* get_name_from_path(const char* path)
 {
-    char *name = path;
-    char *p = path;
+    const char* name = path;
+    const char* p = path;
     while (*p != '\0')
     {
         if (*p == '/' || *p == '\\')
@@ -45,7 +46,7 @@ int main(int argc, char **argv)
     }
 #endif
 
-    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    int sock = (int)socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == -1)
     {
         printf("socket failed.\n");
