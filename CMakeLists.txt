@@ -7,4 +7,3 @@ set(CMAKE_BUILD_TYPE Debug)
 
 add_subdirectory (tests)
 
-add_subdirectory (addons)

@@ -30,10 +30,10 @@ int main(void)
    __print_bytes_hex(bytes, size);
    printf("\n");
 
-   if (e != TFTPC_SUCCESS)
+   if (e != TFTPC_ERROR_NONE)
    {
       tftpc_error_print(ERROR_KIND_LIB, e, "serializing error");
-      if (e != TFTPC_UNEXPECTED_RESULT)
+      if (e != TFTPC_ERROR_UNEXPECTED_RESULT)
          return 1;
       else
          __print_bytes_hex(bytes, size);
@@ -41,7 +41,7 @@ int main(void)
 
    tftpc_packet_t *new_packet = tftpc_packet_from_bytes(bytes, size, &e);
 
-   if (e != TFTPC_SUCCESS)
+   if (e != TFTPC_ERROR_NONE)
    {
       tftpc_error_print(ERROR_KIND_LIB, e, "deserializing error");
       return 1;
