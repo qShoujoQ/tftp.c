@@ -1,3 +1,4 @@
+#define TFTPC_CLIENT_IMPLEMENTATION
 #include "../addons/tftpc_client.c"
 
 int main(void) {

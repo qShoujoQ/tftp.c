@@ -40,15 +40,8 @@ typedef enum _tftpc_error_tftpc_e
     TFTPC_ERROR_UNEXPECTED_RESULT    // packet had unexpected contents (lack of options, data, etc.)
 } tftpc_error_lib_t;
 
-typedef enum tftpc_error_kind_e
-{
-    ERROR_KIND_NET, // defined by the OS, WSAError for windows and errno for linux
-    ERROR_KIND_LIB, // tftpc_error_lib_t
-    ERROR_KIND_TFTP // tftpc_error_tftp_t
-} tftpc_error_kind_t;
-
-const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error);
-void tftpc_error_print(tftpc_error_kind_t kind, uint8_t error, const char *message);
+const char *tftpc_error_lib_to_string(tftpc_error_lib_t error);
+const char *tftpc_error_tftp_to_string(tftpc_error_tftp_t error);
 
 /* ---------------- TFTP ---------------- */
 
@@ -196,7 +189,7 @@ static void __a_copy_options_to(uint8_t **dst, uint16_t *offset, uint16_t *size,
     }
 }
 
-static const char *tftpc_opcode_to_string(tftpc_opcode_t opcode)
+const char *tftpc_opcode_to_string(tftpc_opcode_t opcode)
 {
     const char* strings[] = {
         "INVALID",
@@ -214,7 +207,7 @@ static const char *tftpc_opcode_to_string(tftpc_opcode_t opcode)
         return "UNKNOWN";
 }
 
-static const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error)
+const char* tftpc_error_lib_to_string(tftpc_error_lib_t error)
 {
     const char* lib_error_strings[] = {
         "Success",
@@ -226,7 +219,15 @@ static const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error)
         "TFTP error - got error packet from server",
         "Unexpected result - packet had unexpected contents (lack of options, data, etc.)"
     };
-    
+
+    if (error >= TFTPC_ERROR_NONE && error <= TFTPC_ERROR_UNEXPECTED_RESULT)
+        return lib_error_strings[error];
+    else
+        return "Unknown error";
+}
+
+const char* tftpc_error_tftp_to_string(tftpc_error_tftp_t error)
+{
     const char* tftp_error_strings[] = {
         "Undefined error, see error message (if any)",
         "File not found",
@@ -238,55 +239,10 @@ static const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error)
         "No such user"
     };
 
-    if (kind == ERROR_KIND_LIB && error >= TFTPC_ERROR_NONE && error <= TFTPC_ERROR_UNEXPECTED_RESULT)
-    {
-        return lib_error_strings[error];
-    }
-    else if (kind == ERROR_KIND_TFTP && error >= TFTP_ERROR_UNDEFINED && error <= TFTP_ERROR_NO_SUCH_USER)
-    {
+    if (error >= TFTP_ERROR_UNDEFINED && error <= TFTP_ERROR_NO_SUCH_USER)
         return tftp_error_strings[error];
-    }
-    else if (kind == ERROR_KIND_NET)
-        return "Networking error";
-    
-    return "Unknown error";
-}
-
-void tftpc_error_print(tftpc_error_kind_t kind, uint8_t error, const char *message)
-{
-    if (message == NULL)
-        message = " ";
-
-    if (kind == ERROR_KIND_LIB)
-    {
-        fprintf(stderr, "[ERROR] [LIB]  %s \t %s\n", message, tftpc_error_to_string(ERROR_KIND_LIB, error));
-    }
-    else if (kind == ERROR_KIND_TFTP)
-    {
-        fprintf(stderr, "[ERROR] [TFTP] %s \t %s\n", message, tftpc_error_to_string(ERROR_KIND_TFTP, error));
-    }
-    else if (kind == ERROR_KIND_NET)
-    {
-#ifdef _WIN32 // windows
-
-        char *wsa_message;
-
-        FormatMessageA(
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL, WSAGetLastError(), MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), (LPSTR)&wsa_message, 0, NULL);
-
-        fprintf(stderr, "[ERROR] [NETWORK] %s \t code: %d, message: %s", message, WSAGetLastError(), wsa_message);
-
-        LocalFree(wsa_message);
-
-#else // linux
-
-        fprintf(stderr, "[ERROR] [NETWORK] %s \t code: %d, message: %s", message, errno, strerror(errno));
-
-#endif // end os
-    }
     else
-        fprintf(stderr, "[ERROR] [?] %s\n", message);
+        return "Unknown error";
 }
 
 tftpc_error_lib_t tftpc_packet_add_option(tftpc_packet_t *packet, const char *name, const char *value)

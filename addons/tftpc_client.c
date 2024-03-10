@@ -1,9 +1,6 @@
 #ifndef TFTP_C_CLIENT
 #define TFTP_C_CLIENT
 
-// debug:
-#define TFTPC_CLIENT_IMPLEMENTATION
-
 #include <stdint.h>
 
 enum tftpc_error_client_e {
@@ -76,7 +73,7 @@ static tftpc_error_client_t _new_client_error (enum tftpc_error_client_e code, c
 }
 
 static void tftpc_packet_error_to_string (tftpc_packet_t* error_packet, char* out_str) {
-    const char* error_str = tftpc_error_to_string(ERROR_KIND_TFTP, (uint8_t) error_packet->contents.ERROR_T.code);
+    const char* error_str = tftpc_error_tftp_to_string(error_packet->contents.ERROR_T.code);
     snprintf(out_str, 64, "TFTP error %d (%s): %s", error_packet->contents.ERROR_T.code, error_str, error_packet->contents.ERROR_T.message);
 }
 
