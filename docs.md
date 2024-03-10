@@ -35,16 +35,6 @@ typedef enum _tftpc_error_tftpc_e
 Library error type, returned from most functions in the library.
 
 ```c
-typedef enum tftpc_error_kind_e
-{
-    ERROR_KIND_NET, // defined by the OS, WSAError for windows and errno for linux
-    ERROR_KIND_LIB, // tftpc_error_lib_t
-    ERROR_KIND_TFTP // tftpc_error_tftp_t
-} tftpc_error_kind_t;
-```
-Not sure where was I going with this one. Will be removed in future.
-
-```c
 const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error);
 void tftpc_error_print(tftpc_error_kind_t kind, uint8_t error, const char *message);
 ```
