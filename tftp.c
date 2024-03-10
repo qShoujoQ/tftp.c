@@ -196,7 +196,7 @@ static void __a_copy_options_to(uint8_t **dst, uint16_t *offset, uint16_t *size,
     }
 }
 
-const char *tftpc_opcode_to_string(tftpc_opcode_t opcode)
+static const char *tftpc_opcode_to_string(tftpc_opcode_t opcode)
 {
     const char* strings[] = {
         "INVALID",
@@ -214,7 +214,7 @@ const char *tftpc_opcode_to_string(tftpc_opcode_t opcode)
         return "UNKNOWN";
 }
 
-const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error)
+static const char *tftpc_error_to_string(tftpc_error_kind_t kind, uint8_t error)
 {
     const char* lib_error_strings[] = {
         "Success",
@@ -329,7 +329,7 @@ tftpc_error_lib_t tftpc_packet_add_option(tftpc_packet_t *packet, const char *na
 
 const char *tftpc_packet_get_option(tftpc_packet_t *packet, const char *name, tftpc_error_lib_t *out_error)
 {
-    if (!packet)
+    if (packet == NULL || name == NULL)
     {
         __pass_if_not_null(out_error, TFTPC_ERROR_INVALID_ARGUMENT);
         return NULL;
@@ -435,6 +435,9 @@ tftpc_packet_t *tftpc_packet_create_request(tftpc_opcode_t packet_kind, const ch
 
 tftpc_packet_t *tftpc_packet_create_data_ack(uint16_t block_no, const uint8_t *opt_data, uint16_t opt_data_size)
 {
+    if (opt_data == NULL && opt_data_size != 0)
+        return NULL;
+
     tftpc_opcode_t opcode = (opt_data == NULL || opt_data_size == 0) ? TFTP_ACK : TFTP_DATA;
 
     tftpc_packet_t *packet = (tftpc_packet_t *)malloc(sizeof(tftpc_packet_t));
