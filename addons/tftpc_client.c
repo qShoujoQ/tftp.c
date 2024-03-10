@@ -461,7 +461,7 @@ tftpc_error_client_t tftpc_client_put (
             return _new_client_error(TFTPC_ERROR_CLIENT_PACKET_MALFORMED, "First packet must be DATA or ERROR");
     }
 
-    /* send first data packet */
+    /* send the file */
 
     uint16_t block_number = 1;
     size_t data_index = 0;
@@ -472,9 +472,11 @@ tftpc_error_client_t tftpc_client_put (
     }
 
     do {
+        // DATA -> server
         uint16_t data_size = (uint16_t) (file_size - data_index > block_size ? block_size : file_size - data_index);
         memcpy(data_block, file_data + data_index, data_size);
 
+        send_data:
         tftpc_packet_t* data_packet = tftpc_packet_create_data(block_number, data_block, data_size);
         e = _send_packet(udp_sock_fd, &server_sockaddr, data_packet);
         tftpc_packet_free(data_packet);
@@ -483,6 +485,7 @@ tftpc_error_client_t tftpc_client_put (
             return e;
         }
 
+        // ACK <- server
         tftpc_packet_t ack_packet;
         e = _recv_packet(udp_sock_fd, block_size + sizeof(tftpc_packet_t), &ack_packet, &server_sockaddr);
         if (e.code != TFTPC_ERROR_CLIENT_NONE) {
@@ -496,8 +499,7 @@ tftpc_error_client_t tftpc_client_put (
         }
 
         if (ack_packet.contents.DATACK_T.block != block_number) {
-            free(data_block);
-            return _new_client_error(TFTPC_ERROR_CLIENT_PACKET_MALFORMED, "Invalid block number in ACK packet");
+            goto send_data;
         }
 
         block_number++;
