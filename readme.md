@@ -3,6 +3,7 @@ Based on [RFC 1350](https://datatracker.ietf.org/doc/html/rfc1350) with [Option]
 
 #### Instalation / Using in project
 Nothing to install! Just include the header file in your project and you are ready to go.
+
 If you want to implement your own client or server, or use some of the tftp functionality:
 ```c
 #define TFTPC_IMPLEMENTATION

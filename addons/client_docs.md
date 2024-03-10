@@ -47,8 +47,8 @@ Arguments:
 | ---- | ----------- |
 | udp_sock_fd | File descriptor of the UDP socket. User must create, bind and close the socket. Timeouts are also user's responsibility. |
 | server_addr | Server IPv4 address in format `ip:port`. |
-| file_name | File name to download. In absolute or relative format - depending on server configuration. |
-| mode | TFTP mode. Usually `octet`. |
+| file_name | Name of the file to download. In absolute or relative format - depending on server configuration. |
+| mode | TFTP mode. Usually `octet`, but can be `netascii` or `mail` (obsolete, not supported). |
 | out_file_size | Pointer to size_t variable. Will be filled with the size of the downloaded file. |
 | out_error | Pointer to tftpc_error_client_t variable. Will be filled with error code and message. |
 
@@ -94,7 +94,7 @@ Arguments:
 | udp_sock_fd | File descriptor of the UDP socket. User must create, bind and close the socket. Timeouts are also user's responsibility. |
 | server_addr | Server IPv4 address in format `ip:port`. |
 | file_name | File name to upload. In absolute or relative format - depending on server configuration. Note: It doesn't matter for the client. It will determine, where server will save the file. |
-| mode | TFTP mode. Usually `octet`. |
+| mode | TFTP mode. Usually `octet`, but can be `netascii` or `mail` (obsolete, not supported). |
 | file_data | Array of bytes to upload. |
 | file_size | Size of the array. |
 
