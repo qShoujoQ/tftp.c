@@ -313,6 +313,7 @@ uint8_t* tftpc_client_get (
     tftpc_packet_t* ack_packet = tftpc_packet_create_ack(0);
 
     do {
+        // DATA <- server
         recv_data:
         e = _recv_packet(udp_sock_fd, block_size + sizeof(tftpc_packet_t), &data_packet, &server_sockaddr);
         if (e.code != TFTPC_ERROR_CLIENT_NONE) {
@@ -339,6 +340,7 @@ uint8_t* tftpc_client_get (
         }
 
         if (data_packet.contents.DATACK_T.block != block_number) {
+            // packet lost, resend ACK for previous block
             ack_packet->contents.DATACK_T.block = block_number - 1;
             tftpc_error_client_t e = _send_packet(udp_sock_fd, &server_sockaddr, ack_packet);
             if (e.code != TFTPC_ERROR_CLIENT_NONE) {
@@ -363,6 +365,7 @@ uint8_t* tftpc_client_get (
         memcpy(file_data + file_data_size, data_packet.contents.DATACK_T.data, data_packet.contents.DATACK_T.data_size);
         file_data_size += data_packet.contents.DATACK_T.data_size;
 
+        // ACK -> server
         ack_packet->contents.DATACK_T.block = block_number;
         e = _send_packet(udp_sock_fd, &server_sockaddr, ack_packet);
         if (e.code != TFTPC_ERROR_CLIENT_NONE) {
@@ -476,8 +479,9 @@ tftpc_error_client_t tftpc_client_put (
         uint16_t data_size = (uint16_t) (file_size - data_index > block_size ? block_size : file_size - data_index);
         memcpy(data_block, file_data + data_index, data_size);
 
-        send_data:
         tftpc_packet_t* data_packet = tftpc_packet_create_data(block_number, data_block, data_size);
+        
+    send_data:
         e = _send_packet(udp_sock_fd, &server_sockaddr, data_packet);
         tftpc_packet_free(data_packet);
         if (e.code != TFTPC_ERROR_CLIENT_NONE) {
@@ -499,6 +503,7 @@ tftpc_error_client_t tftpc_client_put (
         }
 
         if (ack_packet.contents.DATACK_T.block != block_number) {
+            // packet lost, resend
             goto send_data;
         }
 

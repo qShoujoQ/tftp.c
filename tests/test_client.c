@@ -11,7 +11,7 @@ int main(void) {
         return 1;
     }
 
-    int timeout_ms = 1000;
+    int timeout_ms = 3000;
     if (setsockopt(udp_socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout_ms, sizeof(timeout_ms)) == SOCKET_ERROR) {
         printf("Error setting socket timeout: %d\n", WSAGetLastError());
         return 1;
@@ -25,11 +25,10 @@ int main(void) {
         printf("Error getting file: %s\n", e.message);
     } else {
         printf("Downloaded migu.jpg\n");
+        FILE* miku = fopen("miku.jpg", "wb");
+        fwrite(get_data, 1, file_size, miku);
+        fclose(miku);
     }
-
-    FILE* miku = fopen("miku.jpg", "wb");
-    fwrite(get_data, 1, file_size, miku);
-    fclose(miku);
 
     free(get_data);
 
