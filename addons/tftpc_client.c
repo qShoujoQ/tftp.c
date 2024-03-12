@@ -6,6 +6,8 @@
 enum tftpc_error_client_e {
     TFTPC_ERROR_CLIENT_NONE = 0,
     TFTPC_ERROR_CLIENT_UNKNOWN,
+    TFTPC_ERROR_CLIENT_FILE_IO,
+    TFTPC_ERROR_CLIENT_INVALID_OPERATION,
     TFTPC_ERROR_CLIENT_NULL_ARG,
     TFTPC_ERROR_CLIENT_PACKET_MALFORMED,
     TFTPC_ERROR_CLIENT_PARAM_INVALID,
@@ -18,6 +20,8 @@ typedef struct tftpc_error_client_s {
     enum tftpc_error_client_e code;
     const char* message;
 } tftpc_error_client_t;
+
+const char* tftpc_client_error_to_string(tftpc_error_client_t error);
 
 uint8_t* tftpc_client_get (
     int udp_sock_fd,
@@ -63,7 +67,11 @@ tftpc_error_client_t tftpc_client_put (
 #include <limits.h>
 #include <assert.h>
 
-#define DBG_PRINT(fmt, ...) printf("[DEBUG]\t" fmt "\n", ##__VA_ARGS__)
+const char* tftpc_client_error_to_string(tftpc_error_client_t error) {
+    static char error_str_buffer[256];
+    snprintf(error_str_buffer, 256, "TFTPC error %d: %s", error.code, error.message);
+    return error_str_buffer;
+}
 
 static tftpc_error_client_t _new_client_error (enum tftpc_error_client_e code, const char* message) {
     tftpc_error_client_t error;
@@ -85,9 +93,7 @@ static struct sockaddr_in sockaddr_from_string(const char *addr_port)
     char *port = strrchr(addr, ':');
     if (port == NULL)
     {
-        // set port to 69
         port = addr + strlen(addr);
-        // strcpy(port, ":69");
         snprintf(port, 4, ":69");
     }
 

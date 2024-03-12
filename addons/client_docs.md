@@ -27,6 +27,11 @@ enum tftpc_error_client_e {
 ```
 Error codes present in all tftpc_error_client_t instances.
 
+```c
+const char* tftpc_client_error_to_string(tftpc_error_client_t error);
+```
+Turns `tftpc_error_client_t` into human-readable static string (max 256 characters).
+
 Functions
 -----
 

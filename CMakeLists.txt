@@ -6,4 +6,4 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Debug)
 
 add_subdirectory (tests)
-
+add_subdirectory (examples)
