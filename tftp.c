@@ -36,8 +36,6 @@ typedef enum _tftpc_error_tftpc_e
     TFTPC_ERROR_BUFFER_OFFSET_ERROR, // offset doesn't equal to the size of buffer (packet is corrupted or bug in deserialization code)
     TFTPC_ERROR_MEMORY_ERROR,        // malloc, realloc, etc. failed. Considered fatal, library will just crash the program.
     TFTPC_ERROR_OPTION_NOT_FOUND,    // option not found in packet
-    TFTPC_ERROR_TFTP_ERROR,          // got error packet from server
-    TFTPC_ERROR_UNEXPECTED_RESULT    // packet had unexpected contents (lack of options, data, etc.)
 } tftpc_error_lib_t;
 
 const char *tftpc_error_lib_to_string(tftpc_error_lib_t error);
@@ -120,6 +118,7 @@ void tftpc_packet_print(const tftpc_packet_t *packet);
 #ifdef TFTPC_IMPLEMENTATION
 
 #define __pass_if_not_null(out_param, value) do { if (out_param) *out_param = value; } while(0)
+#define __abort_if_null(ptr) do { if (ptr == NULL) { fprintf(stderr, "NULL argument in %s:%d, aborting...", __FILE__, __LINE__); abort(); } } while(0)
 
 void __print_bytes_hex(const uint8_t *bytes, uint16_t bytes_size)
 {
@@ -137,6 +136,9 @@ static char *__alloc_copy_string(const uint8_t *src, uint16_t *offset)
     uint16_t str_size = (uint16_t)strlen((char *)src + (*offset)) + 1;
 
     char *dst = malloc(str_size);
+
+    __abort_if_null(dst);
+
     memcpy(dst, src + (*offset), str_size);
 
     *offset += str_size;
@@ -155,6 +157,8 @@ static uint16_t __a_copy_options_from(tftpc_option_t **dst, const uint8_t *src, 
     }
 
     *dst = malloc((o_count + 1) * sizeof(tftpc_option_t));
+
+    __abort_if_null(*dst);
 
     while (idx < bytes_size)
     {
@@ -220,7 +224,7 @@ const char* tftpc_error_lib_to_string(tftpc_error_lib_t error)
         "Unexpected result - packet had unexpected contents (lack of options, data, etc.)"
     };
 
-    if (error >= TFTPC_ERROR_NONE && error <= TFTPC_ERROR_UNEXPECTED_RESULT)
+    if (error >= TFTPC_ERROR_NONE && error <= TFTPC_ERROR_OPTION_NOT_FOUND)
         return lib_error_strings[error];
     else
         return "Unknown error";
@@ -270,9 +274,11 @@ tftpc_error_lib_t tftpc_packet_add_option(tftpc_packet_t *packet, const char *na
     options = realloc(options, (*o_count) * sizeof(tftpc_option_t));
 
     options[*o_count - 1].name = malloc(strlen(name) + 1);
+    __abort_if_null(options[*o_count - 1].name);
     strcpy_s(options[*o_count - 1].name, strlen(name) + 1, name);
 
     options[*o_count - 1].value = malloc(strlen(value) + 1);
+    __abort_if_null(options[*o_count - 1].value);
     strcpy_s(options[*o_count - 1].value, strlen(value) + 1, value);
 
     if (packet->opcode == TFTP_RRQ || packet->opcode == TFTP_WRQ)
@@ -374,13 +380,16 @@ tftpc_packet_t *tftpc_packet_create_request(tftpc_opcode_t packet_kind, const ch
         return NULL;
 
     tftpc_packet_t *p = (tftpc_packet_t *)malloc(sizeof(tftpc_packet_t));
+    __abort_if_null(p);
 
     p->opcode = packet_kind;
 
     p->contents.RWRQ_T.mode = malloc(strlen(mode) + 1);
+    __abort_if_null(p->contents.RWRQ_T.mode);
     strcpy_s(p->contents.RWRQ_T.mode, strlen(mode) + 1, mode);
 
     p->contents.RWRQ_T.file_name = malloc(strlen(file_name) + 1);
+    __abort_if_null(p->contents.RWRQ_T.file_name);
     strcpy_s(p->contents.RWRQ_T.file_name, strlen(file_name) + 1, file_name);
 
     p->contents.RWRQ_T.o_count = 0;
@@ -397,6 +406,7 @@ tftpc_packet_t *tftpc_packet_create_data_ack(uint16_t block_no, const uint8_t *o
     tftpc_opcode_t opcode = (opt_data == NULL || opt_data_size == 0) ? TFTP_ACK : TFTP_DATA;
 
     tftpc_packet_t *packet = (tftpc_packet_t *)malloc(sizeof(tftpc_packet_t));
+    __abort_if_null(packet);
     packet->opcode = opcode;
 
     packet->contents.DATACK_T.block = block_no;
@@ -404,6 +414,7 @@ tftpc_packet_t *tftpc_packet_create_data_ack(uint16_t block_no, const uint8_t *o
     if (opcode == TFTP_DATA)
     {
         packet->contents.DATACK_T.data = malloc(opt_data_size);
+        __abort_if_null(packet->contents.DATACK_T.data);
         memcpy(packet->contents.DATACK_T.data, opt_data, opt_data_size);
 
         packet->contents.DATACK_T.data_size = opt_data_size;
@@ -423,6 +434,7 @@ tftpc_packet_t *tftpc_packet_create_data_ack(uint16_t block_no, const uint8_t *o
 tftpc_packet_t *tftpc_packet_create_oack()
 {
     tftpc_packet_t *packet = (tftpc_packet_t *)malloc(sizeof(tftpc_packet_t));
+    __abort_if_null(packet);
 
     packet->opcode = TFTP_OACK;
     packet->contents.OACK_T.options = NULL;
@@ -437,11 +449,13 @@ tftpc_packet_t *tftpc_packet_create_error(uint16_t error_code, const char *error
         return NULL;
 
     tftpc_packet_t *packet = (tftpc_packet_t *)malloc(sizeof(tftpc_packet_t));
+    __abort_if_null(packet);
 
     packet->opcode = TFTP_ERROR;
     packet->contents.ERROR_T.code = error_code;
 
     packet->contents.ERROR_T.message = malloc(strlen(error_message + 1));
+    __abort_if_null(packet->contents.ERROR_T.message);
     strcpy_s(packet->contents.ERROR_T.message, strlen(error_message) + 1, error_message);
 
     return packet;
@@ -500,6 +514,7 @@ tftpc_packet_t *tftpc_packet_from_bytes(const uint8_t *bytes, uint16_t bytes_siz
     }
 
     tftpc_packet_t *packet = (tftpc_packet_t *)malloc(sizeof(tftpc_packet_t));
+    __abort_if_null(packet);
     uint16_t idx = 0;
 
     // Opcode
@@ -534,6 +549,7 @@ tftpc_packet_t *tftpc_packet_from_bytes(const uint8_t *bytes, uint16_t bytes_siz
         if (packet->opcode == TFTP_DATA)
         {
             packet->contents.DATACK_T.data = malloc(bytes_size - idx);
+            __abort_if_null(packet->contents.DATACK_T.data);
             packet->contents.DATACK_T.data_size = bytes_size - idx;
 
             memcpy(packet->contents.DATACK_T.data, bytes + idx, bytes_size - idx);
@@ -564,9 +580,10 @@ tftpc_packet_t *tftpc_packet_from_bytes(const uint8_t *bytes, uint16_t bytes_siz
             free(packet->contents.OACK_T.options);
             packet->contents.OACK_T.options = NULL;
 
-            __pass_if_not_null(out_error, TFTPC_ERROR_UNEXPECTED_RESULT);
-            // non-fatal error
-            return packet;
+            __pass_if_not_null(out_error, TFTPC_ERROR_BUFFER_OFFSET_ERROR);
+            free(packet);
+
+            return NULL;
         }
 
         break;
@@ -602,6 +619,7 @@ uint8_t *tftpc_bytes_from_packet(const tftpc_packet_t *packet, uint16_t *out_siz
     uint16_t size = 2;
     uint16_t idx = 0;
     uint8_t *bytes = malloc(size);
+    __abort_if_null(bytes);
 
     bytes[idx++] = (packet->opcode >> 8) & 0xFF;
     bytes[idx++] = packet->opcode & 0xFF;
